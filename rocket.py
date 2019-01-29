@@ -61,7 +61,7 @@ class Rocket:
             ),
             self=Self(
                 id='',
-                name='ltworf',
+                name='LtWorf',
             ),
         )
 
