@@ -153,25 +153,31 @@ class Client:
         self._send_chan_info(channel_name, slchan)
 
     def _send_chan_info(self, channel_name: bytes, slchan: slack.Channel):
-        if not self.nouserlist:
-            userlist = []  # type List[bytes]
+        self.s.send(b':%s!salvo@127.0.0.1 JOIN %s\n' % (self.nick, channel_name))
+        self._sendreply(Replies.RPL_TOPIC, slchan.real_topic, [channel_name])
+
+        if self.nouserlist:
+            self._sendreply(Replies.RPL_NAMREPLY, b'', ['=', channel_name])
+        else:
+            userlist = b''  # type bytes
             for i in self.sl_client.get_members(slchan.id):
                 try:
                     u = self.sl_client.get_user(i)
                 except:
                     continue
+                name = u.name.encode('utf8')
                 if u.deleted:
                     # Disabled user, skip it
                     continue
-                name = u.name.encode('utf8')
-                prefix = b'@' if u.is_admin else b''
-                userlist.append(prefix + name)
+                if u.is_admin: name = b'@' + name
+                if len(userlist) + len(name) > 256:
+                    # IRC has a 510-byte limit to messages
+                    # Not sure how much overhead for the command/channel name/etc, so just limit at 256 bytes
+                    self._sendreply(Replies.RPL_NAMREPLY, userlist[1:], ['=', channel_name])
+                    userlist = b''
+                userlist += b' ' + name
+            self._sendreply(Replies.RPL_NAMREPLY, userlist[1:], ['=', channel_name])
 
-            users = b' '.join(userlist)
-
-        self.s.send(b':%s!salvo@127.0.0.1 JOIN %s\n' % (self.nick, channel_name))
-        self._sendreply(Replies.RPL_TOPIC, slchan.real_topic, [channel_name])
-        self._sendreply(Replies.RPL_NAMREPLY, b'' if self.nouserlist else users, ['=', channel_name])
         self._sendreply(Replies.RPL_ENDOFNAMES, 'End of NAMES list', [channel_name])
 
     def _privmsghandler(self, cmd: bytes) -> None:
